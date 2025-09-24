@@ -75,7 +75,12 @@ class WebshareVideoDownloader:
         self.aws_secret_key = aws_secret_key
         self.aws_bucket_name = aws_bucket_name
         self.aws_region = aws_region
-
+        print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        print(f"ACCESS_KEY : {self.aws_access_key}")
+        print(f"SECRET_KEY : {self.aws_secret_key}")
+        print(f"BUCKET_NAME : {self.aws_bucket_name}")
+        print(f"AWS_REGION : {self.aws_region}")
+        print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # Initialize S3 client
         if all([aws_access_key, aws_secret_key, aws_bucket_name]):
             self.s3_client = boto3.client(
