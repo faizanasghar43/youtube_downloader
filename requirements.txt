@@ -10,5 +10,5 @@ pydantic-core==2.23.4
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 aiofiles==23.2.1
-youtube-transcript-api==0.6.2
+youtube-transcript-api==1.2.2
 cryptography==42.0.8
