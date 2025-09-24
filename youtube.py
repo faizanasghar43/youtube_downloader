@@ -1,20 +1,23 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List, Dict
 import yt_dlp
 import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
 import requests
 import random
 import tempfile
 import os
 from pathlib import Path
-import asyncio
 import uvicorn
 from datetime import datetime
 import uuid
 import mimetypes
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 
 
 # Pydantic models
@@ -32,6 +35,19 @@ class VideoDownloadResponse(BaseModel):
     download_id: Optional[str] = None
 
 
+class TranscriptRequest(BaseModel):
+    url: HttpUrl
+    language: Optional[str] = "en"
+
+
+class TranscriptResponse(BaseModel):
+    success: bool
+    message: str
+    transcript: Optional[List[Dict]] = None
+    video_info: Optional[Dict] = None
+    transcript_text: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str
     message: str
@@ -39,10 +55,14 @@ class HealthResponse(BaseModel):
 
 # FastAPI app
 app = FastAPI(
-    title="YouTube Video Downloader API",
+    title="YouTube Video Downloader",
     description="Download YouTube videos with proxy rotation and upload to S3",
     version="1.0.0"
 )
+
+# Setup templates and static files
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Add CORS middleware
 app.add_middleware(
@@ -256,6 +276,127 @@ class WebshareVideoDownloader:
             raise Exception(f"S3 upload failed: {str(e)}")
 
 
+class YouTubeTranscriptService:
+    def __init__(self, proxy_username: str, proxy_password: str):
+        """
+        Initialize the YouTube transcript service with Webshare proxy configuration
+        """
+        self.proxy_username = proxy_username
+        self.proxy_password = proxy_password
+        
+        # Initialize YouTubeTranscriptApi with Webshare proxy configuration
+        self.ytt_api = YouTubeTranscriptApi(
+            proxy_config=WebshareProxyConfig(
+                proxy_username=proxy_username,
+                proxy_password=proxy_password,
+                filter_ip_locations=["us", "ca", "de", "gb"],  # US, Canada, Germany, UK
+            )
+        )
+    
+    def extract_video_id(self, url: str) -> Optional[str]:
+        """Extract video ID from YouTube URL"""
+        import re
+        patterns = [
+            r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([\w-]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+    
+    async def get_video_info(self, video_id: str) -> Dict:
+        """Get basic video information"""
+        try:
+            # Use yt-dlp to get video info
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+                return {
+                    'title': info.get('title', 'Unknown Title'),
+                    'duration': info.get('duration', 0),
+                    'uploader': info.get('uploader', 'Unknown'),
+                    'view_count': info.get('view_count', 0),
+                    'video_id': video_id
+                }
+        except Exception as e:
+            return {
+                'title': 'Unknown Title',
+                'duration': 0,
+                'uploader': 'Unknown',
+                'view_count': 0,
+                'video_id': video_id,
+                'error': str(e)
+            }
+    
+    async def get_transcript(self, url: str, language: str = "en") -> Dict:
+        """Get transcript for a YouTube video"""
+        try:
+            # Extract video ID
+            video_id = self.extract_video_id(str(url))
+            if not video_id:
+                return {
+                    'success': False,
+                    'message': 'Invalid YouTube URL. Could not extract video ID.',
+                    'video_info': None,
+                    'transcript': None,
+                    'transcript_text': None
+                }
+            
+            # Get video info
+            video_info = await self.get_video_info(video_id)
+            
+            # Check if video is longer than 1 minute (60 seconds)
+            if video_info.get('duration', 0) > 60:
+                return {
+                    'success': False,
+                    'message': 'Video is longer than 1 minute. Transcription is only available for videos up to 1 minute.',
+                    'video_info': video_info,
+                    'transcript': None,
+                    'transcript_text': None
+                }
+            
+            # Fetch transcript
+            transcript = self.ytt_api.fetch(video_id, languages=[language])
+            
+            # Convert transcript to list of dictionaries
+            transcript_data = []
+            transcript_text = ""
+            
+            for snippet in transcript:
+                transcript_data.append({
+                    'start': snippet.start,
+                    'duration': snippet.duration,
+                    'text': snippet.text
+                })
+                transcript_text += snippet.text + " "
+            
+            return {
+                'success': True,
+                'message': 'Transcript fetched successfully',
+                'video_info': video_info,
+                'transcript': transcript_data,
+                'transcript_text': transcript_text.strip()
+            }
+            
+        except Exception as e:
+            error_message = str(e)
+            if "No transcript" in error_message:
+                error_message = "No transcript available for this video. The video may not have captions enabled."
+            elif "Video unavailable" in error_message:
+                error_message = "Video is unavailable or private."
+            else:
+                error_message = f"Error fetching transcript: {error_message}"
+            
+            return {
+                'success': False,
+                'message': error_message,
+                'video_info': await self.get_video_info(self.extract_video_id(str(url)) or ""),
+                'transcript': None,
+                'transcript_text': None
+            }
+
+
 # Configuration - Replace with your actual values
 CONFIG = {
     "PROXY_PASSWORD": os.getenv("PROXY_PASSWORD"),
@@ -266,10 +407,14 @@ CONFIG = {
     "AWS_ACCESS_KEY": os.getenv("AWS_ACCESS_KEY_ID"),
     "AWS_SECRET_KEY": os.getenv("AWS_SECRET_ACCESS_KEY"),
     "AWS_BUCKET_NAME": os.getenv("AWS_BUCKET_NAME", "your-bucket-name"),
-    "AWS_REGION": os.getenv("AWS_REGION", "us-east-1")
+    "AWS_REGION": os.getenv("AWS_REGION", "us-east-1"),
+    "DOMAIN": os.getenv("DOMAIN", "http://localhost:8000"),
+    "GA_MEASUREMENT_ID": os.getenv("GA_MEASUREMENT_ID", "GA_MEASUREMENT_ID"),
+    "TRANSCRIPT_PROXY_USERNAME": os.getenv("TRANSCRIPT_PROXY_USERNAME", "lvzvdcev"),
+    "TRANSCRIPT_PROXY_PASSWORD": os.getenv("TRANSCRIPT_PROXY_PASSWORD", "aml70orzku77")
 }
 
-# Initialize downloader
+# Initialize services
 downloader = WebshareVideoDownloader(
     proxy_password=CONFIG["PROXY_PASSWORD"],
     proxy_usernames=CONFIG["PROXY_USERNAMES"],
@@ -279,16 +424,73 @@ downloader = WebshareVideoDownloader(
     aws_region=CONFIG["AWS_REGION"]
 )
 
+transcript_service = YouTubeTranscriptService(
+    proxy_username=CONFIG["TRANSCRIPT_PROXY_USERNAME"],
+    proxy_password=CONFIG["TRANSCRIPT_PROXY_PASSWORD"]
+)
+
+
+# Frontend Routes
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Main page with download form"""
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "current_date": datetime.now(),
+        "domain": CONFIG["DOMAIN"],
+        "ga_measurement_id": CONFIG["GA_MEASUREMENT_ID"]
+    })
+
+@app.get("/how-it-works", response_class=HTMLResponse)
+async def how_it_works(request: Request):
+    """How it works page"""
+    return templates.TemplateResponse("how_it_works.html", {
+        "request": request,
+        "current_date": datetime.now(),
+        "domain": CONFIG["DOMAIN"]
+    })
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy(request: Request):
+    """Privacy policy page"""
+    return templates.TemplateResponse("privacy.html", {
+        "request": request,
+        "current_date": datetime.now(),
+        "domain": CONFIG["DOMAIN"]
+    })
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms(request: Request):
+    """Terms of service page"""
+    return templates.TemplateResponse("terms.html", {
+        "request": request,
+        "current_date": datetime.now(),
+        "domain": CONFIG["DOMAIN"]
+    })
+
+@app.get("/sitemap.xml")
+async def sitemap():
+    """Sitemap for SEO"""
+    return FileResponse("static/sitemap.xml", media_type="application/xml")
+
+@app.get("/robots.txt")
+async def robots():
+    """Robots.txt for SEO"""
+    robots_content = f"""User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /health
+Sitemap: {CONFIG["DOMAIN"]}/sitemap.xml"""
+    return FileResponse("static/robots.txt", media_type="text/plain")
 
 # API Routes
-@app.get("/", response_model=HealthResponse)
-async def root():
-    """Health check endpoint"""
+@app.get("/api/health", response_model=HealthResponse)
+async def api_health_check():
+    """API health check endpoint"""
     return HealthResponse(
         status="healthy",
         message="YouTube Video Downloader API is running"
     )
-
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -334,6 +536,36 @@ async def download_video(request: VideoDownloadRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/download", response_model=VideoDownloadResponse)
+async def api_download_video(request: VideoDownloadRequest):
+    """API endpoint for downloading video"""
+    return await download_video(request)
+
+@app.post("/transcript", response_model=TranscriptResponse)
+async def get_transcript(request: TranscriptRequest):
+    """Get transcript for a YouTube video (max 1 minute)"""
+    try:
+        result = await transcript_service.get_transcript(
+            url=str(request.url),
+            language=request.language
+        )
+        
+        return TranscriptResponse(
+            success=result['success'],
+            message=result['message'],
+            transcript=result.get('transcript'),
+            video_info=result.get('video_info'),
+            transcript_text=result.get('transcript_text')
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/transcript", response_model=TranscriptResponse)
+async def api_get_transcript(request: TranscriptRequest):
+    """API endpoint for getting transcript"""
+    return await get_transcript(request)
 
 
 @app.post("/download-async", response_model=Dict)

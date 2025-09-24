@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Terms of Service - YouTube Video Downloader{% endblock %}
+{% block description %}Read our terms of service for using our YouTube video downloader. Understand the rules and guidelines for our service.{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <h1 class="mb-4">Terms of Service</h1>
+                <p class="text-muted">Last updated: {{ current_date.strftime('%B %d, %Y') }}</p>
+                
+                <div class="content">
+                    <h3>Acceptance of Terms</h3>
+                    <p>By using our YouTube video downloader service, you agree to be bound by these Terms of Service.</p>
+                    
+                    <h3>Use of Service</h3>
+                    <p>Our service is provided for personal, non-commercial use only. You agree to:</p>
+                    <ul>
+                        <li>Use the service responsibly and legally</li>
+                        <li>Respect YouTube's Terms of Service</li>
+                        <li>Not use the service for illegal activities</li>
+                        <li>Not abuse or overload our servers</li>
+                    </ul>
+                    
+                    <h3>Copyright Notice</h3>
+                    <p>We respect copyright laws. Users are responsible for ensuring they have the right to download content. We do not endorse or facilitate copyright infringement.</p>
+                    
+                    <h3>Service Availability</h3>
+                    <p>We strive to maintain service availability but cannot guarantee uninterrupted access. The service is provided "as is" without warranties.</p>
+                    
+                    <h3>Limitation of Liability</h3>
+                    <p>We are not liable for any damages resulting from the use of our service, including but not limited to data loss or copyright issues.</p>
+                    
+                    <h3>Changes to Terms</h3>
+                    <p>We reserve the right to modify these terms at any time. Continued use of the service constitutes acceptance of modified terms.</p>
+                    
+                    <h3>Contact Information</h3>
+                    <p>For questions about these Terms of Service, please contact us.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

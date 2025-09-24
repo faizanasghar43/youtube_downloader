@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block description %}Download YouTube videos in high quality with our free online YouTube downloader. Fast, secure, and easy to use.{% endblock %}">
+    <meta name="keywords" content="{% block keywords %}youtube downloader, youtube video download, youtube mp4 download, youtube mp3 download, free youtube downloader{% endblock %}">
+    <meta name="author" content="YouTube Downloader">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ domain }}{{ request.url.path }}">
+    <meta property="og:title" content="{% block og_title %}Free YouTube Video Downloader - Download YouTube Videos Online{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Download YouTube videos in high quality with our free online YouTube downloader. Fast, secure, and easy to use.{% endblock %}">
+    <meta property="og:image" content="{{ domain }}{{ url_for('static', path='/images/og-image.jpg') }}">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ domain }}{{ request.url.path }}">
+    <meta property="twitter:title" content="{% block twitter_title %}Free YouTube Video Downloader{% endblock %}">
+    <meta property="twitter:description" content="{% block twitter_description %}Download YouTube videos in high quality with our free online YouTube downloader.{% endblock %}">
+    <meta property="twitter:image" content="{{ domain }}{{ url_for('static', path='/images/og-image.jpg') }}">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ domain }}{{ request.url.path }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='/images/favicon.ico') }}">
+    
+    <title>{% block title %}Free YouTube Video Downloader - Download YouTube Videos Online{% endblock %}</title>
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', path='/css/style.css') }}" rel="stylesheet">
+    
+    <!-- Google Analytics -->
+    {% if ga_measurement_id and ga_measurement_id != "GA_MEASUREMENT_ID" %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ ga_measurement_id }}');
+    </script>
+    {% endif %}
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "YouTube Video Downloader",
+        "description": "Free online YouTube video downloader and transcript extractor",
+        "url": "{{ domain }}",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fab fa-youtube me-2"></i>YouTube Downloader
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('how_it_works') }}">How It Works</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('privacy') }}">Privacy</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>YouTube Downloader</h5>
+                    <p class="mb-0">Free, fast, and secure YouTube video downloading service.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">&copy; 2024 YouTube Downloader. All rights reserved.</p>
+                    <div class="mt-2">
+                        <a href="{{ url_for('privacy') }}" class="text-light me-3">Privacy Policy</a>
+                        <a href="{{ url_for('terms') }}" class="text-light">Terms of Service</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
