@@ -6,6 +6,7 @@ A modern, responsive YouTube video downloader with integrated ads, SEO optimizat
 
 - 🎥 **YouTube Video Download**: Download videos in various qualities (1080p, 720p, 480p, etc.)
 - 🎵 **Audio Extraction**: Convert videos to MP3 format
+- 📱 **YouTube Shorts Support**: Download YouTube Shorts and live streams
 - 📝 **Transcript Extraction**: Get transcripts for videos up to 1 minute
 - 🌍 **Multi-language Support**: Transcripts in multiple languages
 - 🚀 **Fast & Secure**: Uses proxy rotation for reliable downloads

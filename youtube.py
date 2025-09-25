@@ -145,12 +145,28 @@ class WebshareVideoDownloader:
             'proxy': proxy_url,
             'outtmpl': output_path,
             'ignoreerrors': False,
-            'retries': 3,
-            'sleep_interval': 1,
-            'max_sleep_interval': 5,
+            'retries': 5,
+            'sleep_interval': 2,
+            'max_sleep_interval': 10,
             'writeinfojson': False,
             'writesubtitles': False,
             'writeautomaticsub': False,
+            'extract_flat': False,
+            'no_warnings': False,
+            'prefer_insecure': False,
+            'geo_bypass': True,
+            'geo_bypass_country': 'US',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            },
+            'cookiesfrombrowser': None,
+            'extractor_args': {
+                'youtube': {
+                    'skip': ['dash', 'hls'],
+                    'player_skip': ['configs'],
+                    'player_client': ['android', 'web']
+                }
+            }
         }
 
         if audio_only:
@@ -162,11 +178,14 @@ class WebshareVideoDownloader:
             })
         else:
             if quality == "best":
-                base_options['format'] = 'best[height<=1080]'
+                # Support for YouTube Shorts and regular videos
+                base_options['format'] = 'best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best'
             elif quality == "worst":
-                base_options['format'] = 'worst'
+                base_options['format'] = 'worst[ext=mp4]/worst'
             else:
-                base_options['format'] = f'best[height<={quality[:-1]}]'
+                # Specific quality with mp4 preference
+                height = quality[:-1] if quality.endswith('p') else quality
+                base_options['format'] = f'best[height<={height}][ext=mp4]/best[height<={height}]/best[ext=mp4]/best'
 
         return base_options
 
@@ -183,25 +202,64 @@ class WebshareVideoDownloader:
                 # Get yt-dlp options
                 options = self.get_yt_dlp_options(output_template, quality, audio_only)
 
-                # Download video
+                # Download video with better error handling
                 with yt_dlp.YoutubeDL(options) as ydl:
-                    # Get video info first
-                    info = ydl.extract_info(url, download=False)
-                    title = info.get('title', 'Unknown Title')
-                    duration = info.get('duration', 0)
-                    uploader = info.get('uploader', 'Unknown')
-                    view_count = info.get('view_count', 0)
+                    try:
+                        # Get video info first
+                        info = ydl.extract_info(url, download=False)
+                        if not info:
+                            return {
+                                'success': False,
+                                'message': 'Could not extract video information. The video may be private, deleted, or restricted.',
+                                'download_id': download_id
+                            }
+                            
+                        title = info.get('title', 'Unknown Title')
+                        duration = info.get('duration', 0)
+                        uploader = info.get('uploader', 'Unknown')
+                        view_count = info.get('view_count', 0)
+                        video_type = info.get('duration', 0) <= 60 and 'shorts' in url.lower() or 'shorts' in info.get('webpage_url', '').lower()
 
-                    video_info = {
-                        'title': title,
-                        'duration': duration,
-                        'uploader': uploader,
-                        'view_count': view_count,
-                        'original_url': url
-                    }
+                        video_info = {
+                            'title': title,
+                            'duration': duration,
+                            'uploader': uploader,
+                            'view_count': view_count,
+                            'original_url': url,
+                            'is_shorts': video_type
+                        }
 
-                    # Download the video
-                    ydl.download([url])
+                        # Download the video
+                        ydl.download([url])
+
+                    except yt_dlp.DownloadError as e:
+                        error_msg = str(e)
+                        if "403" in error_msg or "Forbidden" in error_msg:
+                            return {
+                                'success': False,
+                                'message': 'Access denied. The video may be private, age-restricted, or blocked in your region. Try using a different proxy or VPN.',
+                                'video_info': video_info if 'video_info' in locals() else None,
+                                'download_id': download_id
+                            }
+                        elif "404" in error_msg or "Not Found" in error_msg:
+                            return {
+                                'success': False,
+                                'message': 'Video not found. The video may have been deleted or the URL is incorrect.',
+                                'download_id': download_id
+                            }
+                        elif "Sign in" in error_msg or "login" in error_msg.lower():
+                            return {
+                                'success': False,
+                                'message': 'This video requires sign-in to view. We cannot download private or restricted videos.',
+                                'download_id': download_id
+                            }
+                        else:
+                            return {
+                                'success': False,
+                                'message': f'Download failed: {error_msg}',
+                                'video_info': video_info if 'video_info' in locals() else None,
+                                'download_id': download_id
+                            }
 
                 # Find the downloaded file
                 downloaded_files = list(Path(temp_dir).glob(f"{download_id}.*"))
@@ -209,8 +267,9 @@ class WebshareVideoDownloader:
                 if not downloaded_files:
                     return {
                         'success': False,
-                        'message': 'No file was downloaded',
-                        'video_info': video_info
+                        'message': 'No file was downloaded. The video may not be available in the requested format.',
+                        'video_info': video_info if 'video_info' in locals() else None,
+                        'download_id': download_id
                     }
 
                 downloaded_file = downloaded_files[0]
@@ -230,13 +289,15 @@ class WebshareVideoDownloader:
                     return {
                         'success': False,
                         'message': 'Video downloaded but S3 upload not configured',
-                        'video_info': video_info
+                        'video_info': video_info,
+                        'download_id': download_id
                     }
 
             except Exception as e:
+                error_msg = str(e)
                 return {
                     'success': False,
-                    'message': f'Error downloading video: {str(e)}',
+                    'message': f'Unexpected error: {error_msg}',
                     'download_id': download_id
                 }
 

@@ -118,7 +118,9 @@ function isValidYouTubeUrl(url) {
         /^https?:\/\/(www\.)?youtube\.com\/watch\?v=[\w-]+/,
         /^https?:\/\/(www\.)?youtu\.be\/[\w-]+/,
         /^https?:\/\/(www\.)?youtube\.com\/embed\/[\w-]+/,
-        /^https?:\/\/(www\.)?youtube\.com\/v\/[\w-]+/
+        /^https?:\/\/(www\.)?youtube\.com\/v\/[\w-]+/,
+        /^https?:\/\/(www\.)?youtube\.com\/shorts\/[\w-]+/,
+        /^https?:\/\/(www\.)?youtube\.com\/live\/[\w-]+/
     ];
     
     return patterns.some(pattern => pattern.test(url));
@@ -127,7 +129,7 @@ function isValidYouTubeUrl(url) {
 // Extract video ID from URL
 function extractVideoId(url) {
     const patterns = [
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([\w-]+)/,
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([\w-]+)/,
     ];
     
     for (const pattern of patterns) {
